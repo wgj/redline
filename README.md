@@ -1,6 +1,6 @@
-# usage-pacing
+# 🔴 RedLine
 
-**Never hit a rate limit wall again.** Live usage checkers for Claude.ai (Max/Pro) and OpenAI (Plus/Pro/Codex) that give your agent real-time awareness of remaining budget — so it can go full-send when limits are fresh and automatically conserve when they're running low.
+**Never hit the red line again.** Live usage checkers for Claude.ai (Max/Pro) and OpenAI (Plus/Pro/Codex) that give your agent real-time awareness of remaining budget — so it can go full-send when limits are fresh and automatically conserve when they're running low.
 
 Built for [OpenClaw](https://github.com/openclaw/openclaw) agents but the scripts work standalone too.
 
@@ -62,7 +62,7 @@ The result: **maximum token efficiency at all hours.** Your agent runs at full c
 ## As an OpenClaw skill
 
 ```bash
-clawhub install usage-pacing
+clawhub install redline
 ```
 
 Then add the pacing logic to your `HEARTBEAT.md` — see [SKILL.md](SKILL.md) for details.

@@ -1,6 +1,6 @@
 ---
-name: usage-pacing
-description: Live rate-limit awareness for Claude.ai (Max/Pro) and OpenAI (Plus/Pro/Codex). Never hit a wall again — your agent checks remaining budget every heartbeat and automatically throttles from full-send to conservation mode. Two CLI scripts + a 4-tier pacing strategy (GREEN/YELLOW/ORANGE/RED) that keeps you running at maximum token efficiency 24/7.
+name: redline
+description: Live rate-limit awareness for Claude.ai (Max/Pro) and OpenAI (Plus/Pro/Codex). Never hit the red line again — your agent checks remaining budget every heartbeat and automatically throttles from full-send to conservation mode. Two CLI scripts + a 4-tier pacing strategy (GREEN/YELLOW/ORANGE/RED) that keeps you running at maximum token efficiency 24/7.
 metadata:
   openclaw:
     requires:
