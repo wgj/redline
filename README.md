@@ -1,14 +1,19 @@
 # usage-pacing
 
-Live rate-limit checkers for **Claude.ai** (Max/Pro) and **OpenAI** (Plus/Pro/Codex) with automatic pacing tiers for AI agents.
+**Never hit a rate limit wall again.** Live usage checkers for Claude.ai (Max/Pro) and OpenAI (Plus/Pro/Codex) that give your agent real-time awareness of remaining budget — so it can go full-send when limits are fresh and automatically conserve when they're running low.
 
-Built for [OpenClaw](https://github.com/openclaw/openclaw) but the scripts work standalone too.
+Built for [OpenClaw](https://github.com/openclaw/openclaw) agents but the scripts work standalone too.
 
-## What it does
+## Why this exists
 
-- **`claude-usage`** — Checks your Claude.ai plan usage (5-hour window, weekly, extra credits) via the Anthropic OAuth API
-- **`openai-usage`** — Checks your OpenAI/Codex plan usage (primary/secondary rate windows, credits) via the ChatGPT API
-- **Pacing tiers** — GREEN/YELLOW/ORANGE/RED system to automatically throttle agent behavior as limits approach
+AI agents on subscription plans (Anthropic Max, OpenAI Plus/Pro) have rolling rate windows — but no built-in way to check how much is left. Your agent burns through limits at 2 PM, then sits useless until the window resets. Or worse, it rations everything all day "just in case."
+
+This skill gives your agent **live rate-limit awareness**:
+- **`claude-usage`** — 5-hour window, weekly window, extra credits, model-specific buckets (Opus/Sonnet) via the Anthropic OAuth API
+- **`openai-usage`** — Primary/secondary rate windows, credits balance via the ChatGPT API
+- **4-tier pacing** — Automatic throttle from GREEN (full operations) → YELLOW (skip sub-agents) → ORANGE (essential only) → RED (critical only, warn user)
+
+The result: **maximum token efficiency at all hours.** Your agent runs at full capacity when budget allows and gracefully degrades when it doesn't — no surprises, no dead periods.
 
 ## Quick start
 

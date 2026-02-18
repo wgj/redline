@@ -1,6 +1,6 @@
 ---
 name: usage-pacing
-description: Check live rate-limit usage for Claude.ai (Max/Pro) and OpenAI (Plus/Pro/Codex) and apply automatic pacing tiers to conserve budget.
+description: Live rate-limit awareness for Claude.ai (Max/Pro) and OpenAI (Plus/Pro/Codex). Never hit a wall again — your agent checks remaining budget every heartbeat and automatically throttles from full-send to conservation mode. Two CLI scripts + a 4-tier pacing strategy (GREEN/YELLOW/ORANGE/RED) that keeps you running at maximum token efficiency 24/7.
 metadata:
   openclaw:
     requires:
