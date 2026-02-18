@@ -1,0 +1,81 @@
+#!/usr/bin/env python3
+"""Check Claude.ai live usage limits (Max/Pro plan)."""
+
+import json, subprocess, sys, urllib.request, urllib.error
+from datetime import datetime, timezone
+
+def get_token():
+    raw = subprocess.check_output([
+        "security", "find-generic-password",
+        "-s", "Claude Code-credentials", "-a", "wgj-ai", "-w"
+    ], text=True).strip()
+    data = json.loads(raw)
+    return data["claudeAiOauth"]["accessToken"], data["claudeAiOauth"].get("rateLimitTier", "unknown")
+
+def fetch_usage(token):
+    req = urllib.request.Request("https://api.anthropic.com/api/oauth/usage",
+        headers={"Authorization": f"Bearer {token}", "anthropic-beta": "oauth-2025-04-20"})
+    return json.loads(urllib.request.urlopen(req).read().decode())
+
+def fmt_reset(iso_str):
+    if not iso_str: return ""
+    dt = datetime.fromisoformat(iso_str)
+    now = datetime.now(timezone.utc)
+    delta = dt - now
+    h, m = divmod(int(delta.total_seconds()) // 60, 60)
+    local = dt.astimezone().strftime("%I:%M %p %b %d")
+    return f"{local} ({h}h{m:02d}m)"
+
+def bar(pct, width=20):
+    used = pct / 100
+    filled = int(used * width)
+    remaining = 100 - pct
+    if remaining > 60: color = "\033[32m"      # green
+    elif remaining > 30: color = "\033[33m"     # yellow
+    elif remaining > 10: color = "\033[38;5;208m"  # orange
+    else: color = "\033[31m"                    # red
+    reset = "\033[0m"
+    return f"{color}{'█' * filled}{'░' * (width - filled)}{reset} {remaining:.0f}% left"
+
+def main():
+    json_mode = "--json" in sys.argv
+    try:
+        token, tier = get_token()
+        data = fetch_usage(token)
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    if json_mode:
+        print(json.dumps(data, indent=2))
+        return
+
+    print(f"\n  Claude Usage ({tier})")
+    print(f"  {'─' * 40}")
+
+    for key, label in [("five_hour", "5-Hour"), ("seven_day", "Weekly")]:
+        bucket = data.get(key)
+        if not bucket: continue
+        pct = bucket["utilization"]
+        reset = fmt_reset(bucket.get("resets_at"))
+        print(f"  {label:>8}  {bar(pct)}  resets {reset}")
+
+    for key, label in [("seven_day_opus", "Opus"), ("seven_day_sonnet", "Sonnet")]:
+        bucket = data.get(key)
+        if not bucket: continue
+        pct = bucket["utilization"]
+        if pct > 0:
+            reset = fmt_reset(bucket.get("resets_at"))
+            print(f"  {label:>8}  {bar(pct)}  resets {reset}")
+
+    extra = data.get("extra_usage")
+    if extra and extra.get("is_enabled"):
+        used = extra.get("used_credits", 0)
+        limit = extra.get("monthly_limit", 0)
+        pct = extra.get("utilization", 0)
+        print(f"  {'Credits':>8}  {bar(pct)}  ${used:.0f}/${limit} used")
+
+    print()
+
+if __name__ == "__main__":
+    main()

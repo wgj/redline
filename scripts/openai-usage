@@ -1,0 +1,102 @@
+#!/usr/bin/env python3
+"""Check OpenAI/Codex live usage (rate limits, plan type, credits).
+
+Reads OAuth token from OpenClaw's auth-profiles.json and calls
+chatgpt.com/backend-api/wham/usage (same endpoint OpenClaw uses internally).
+"""
+
+import json, sys, argparse, urllib.request, math, os
+from datetime import datetime, timezone
+
+AUTH_PROFILES = os.path.expanduser(
+    "~/.openclaw/agents/main/agent/auth-profiles.json"
+)
+
+BAR_WIDTH = 30
+COLORS = {
+    "green": "\033[92m",
+    "yellow": "\033[93m",
+    "red": "\033[91m",
+    "dim": "\033[90m",
+    "reset": "\033[0m",
+    "bold": "\033[1m",
+}
+
+
+def get_token():
+    with open(AUTH_PROFILES) as f:
+        data = json.load(f)
+    prof = data.get("profiles", {}).get("openai-codex:default")
+    if not prof:
+        sys.exit("No openai-codex:default profile found in auth-profiles.json")
+    return prof["access"], prof.get("accountId")
+
+
+def fetch_usage(token, account_id):
+    url = "https://chatgpt.com/backend-api/wham/usage"
+    req = urllib.request.Request(url, method="GET")
+    req.add_header("Authorization", f"Bearer {token}")
+    req.add_header("User-Agent", "CodexBar")
+    req.add_header("Accept", "application/json")
+    if account_id:
+        req.add_header("ChatGPT-Account-Id", account_id)
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        return json.loads(resp.read())
+
+
+def bar(pct, width=BAR_WIDTH):
+    filled = round(pct / 100 * width)
+    empty = width - filled
+    if pct < 60:
+        color = COLORS["green"]
+    elif pct < 85:
+        color = COLORS["yellow"]
+    else:
+        color = COLORS["red"]
+    return f"{color}{'█' * filled}{COLORS['dim']}{'░' * empty}{COLORS['reset']}"
+
+
+def format_reset(ts):
+    if not ts:
+        return ""
+    dt = datetime.fromtimestamp(ts, tz=timezone.utc).astimezone()
+    return dt.strftime("%-I:%M %p %Z")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Check OpenAI/Codex usage limits")
+    parser.add_argument("--json", action="store_true", help="JSON output")
+    args = parser.parse_args()
+
+    token, account_id = get_token()
+    data = fetch_usage(token, account_id)
+
+    if args.json:
+        print(json.dumps(data, indent=2))
+        return
+
+    plan = data.get("plan_type", "unknown")
+    print(f"{COLORS['bold']}OpenAI Usage{COLORS['reset']}  plan: {plan}")
+
+    rl = data.get("rate_limit", {})
+    for key, label in [("primary_window", None), ("secondary_window", None)]:
+        w = rl.get(key)
+        if not w:
+            continue
+        secs = w.get("limit_window_seconds", 10800)
+        hours = round(secs / 3600)
+        wlabel = f"Day" if hours >= 24 else f"{hours}h"
+        pct = w.get("used_percent", 0)
+        remaining = 100 - pct
+        reset = format_reset(w.get("reset_at"))
+        reset_str = f"  resets {reset}" if reset else ""
+        print(f"  {wlabel:>4}  {bar(pct)} {remaining:.0f}% left{reset_str}")
+
+    credits = data.get("credits", {})
+    if credits.get("balance") is not None:
+        bal = float(credits["balance"])
+        print(f"  Credits: ${bal:.2f}")
+
+
+if __name__ == "__main__":
+    main()
