@@ -4,13 +4,83 @@
 import json, subprocess, sys, urllib.request, urllib.error
 from datetime import datetime, timezone
 
-def get_token():
+KEYCHAIN_SERVICE = "Claude Code-credentials"
+KEYCHAIN_ACCOUNT = "wgj-ai"
+TOKEN_URL = "https://platform.claude.com/v1/oauth/token"
+CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
+
+def _read_keychain():
     raw = subprocess.check_output([
         "security", "find-generic-password",
-        "-s", "Claude Code-credentials", "-a", "wgj-ai", "-w"
+        "-s", KEYCHAIN_SERVICE, "-a", KEYCHAIN_ACCOUNT, "-w"
     ], text=True).strip()
-    data = json.loads(raw)
-    return data["claudeAiOauth"]["accessToken"], data["claudeAiOauth"].get("rateLimitTier", "unknown")
+    return json.loads(raw)
+
+def _write_keychain(data):
+    payload = json.dumps(data)
+    hex_payload = payload.encode("utf-8").hex()
+    # Delete then add (security doesn't have a reliable update)
+    subprocess.run([
+        "security", "delete-generic-password",
+        "-s", KEYCHAIN_SERVICE, "-a", KEYCHAIN_ACCOUNT
+    ], capture_output=True)
+    subprocess.check_call([
+        "security", "add-generic-password",
+        "-s", KEYCHAIN_SERVICE, "-a", KEYCHAIN_ACCOUNT,
+        "-X", hex_payload
+    ])
+
+def _refresh_token(data):
+    """Refresh the OAuth token using the refresh_token grant."""
+    oauth = data["claudeAiOauth"]
+    refresh_token = oauth.get("refreshToken")
+    if not refresh_token:
+        raise RuntimeError("No refresh token available")
+
+    body = json.dumps({
+        "grant_type": "refresh_token",
+        "refresh_token": refresh_token,
+        "client_id": CLIENT_ID,
+    }).encode()
+
+    req = urllib.request.Request(TOKEN_URL, data=body,
+        headers={"Content-Type": "application/json", "User-Agent": "Claude-Code/1.0"},
+        method="POST")
+    resp = json.loads(urllib.request.urlopen(req).read().decode())
+
+    # Update the stored credentials
+    oauth["accessToken"] = resp["access_token"]
+    if "refresh_token" in resp:
+        oauth["refreshToken"] = resp["refresh_token"]
+    # expires_in is seconds; store as ms timestamp
+    expires_in = resp.get("expires_in", 3600)
+    oauth["expiresAt"] = int(datetime.now(timezone.utc).timestamp() * 1000) + (expires_in * 1000)
+
+    _write_keychain(data)
+    return oauth["accessToken"]
+
+def get_token():
+    data = _read_keychain()
+    oauth = data["claudeAiOauth"]
+    tier = oauth.get("rateLimitTier", "unknown")
+
+    # Check if token is expired or about to expire (within 5 min)
+    expires_at = oauth.get("expiresAt", 0)
+    now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+    if now_ms >= (expires_at - 300000):  # 5 min buffer
+        try:
+            new_token = _refresh_token(data)
+            return new_token, tier
+        except Exception as e:
+            if now_ms >= expires_at:
+                raise RuntimeError(
+                    f"OAuth token expired and refresh failed: {e}. "
+                    "Run any `claude` command to re-authenticate."
+                )
+            # Token not yet expired, just close to it — use existing
+            pass
+
+    return oauth["accessToken"], tier
 
 def fetch_usage(token):
     req = urllib.request.Request("https://api.anthropic.com/api/oauth/usage",
@@ -38,6 +108,16 @@ def bar(pct, width=20):
     return f"{color}{'█' * filled}{'░' * (width - filled)}{reset} {remaining:.0f}% left"
 
 def main():
+    if "--refresh" in sys.argv:
+        try:
+            data = _read_keychain()
+            new_token = _refresh_token(data)
+            print(f"Token refreshed successfully. New token prefix: {new_token[:15]}...")
+        except Exception as e:
+            print(f"Refresh failed: {e}", file=sys.stderr)
+            sys.exit(1)
+        return
+
     json_mode = "--json" in sys.argv
     try:
         token, tier = get_token()
